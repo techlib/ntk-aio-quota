@@ -4,5 +4,5 @@
   "url": "",
   "description": "Display quota on the home directory.",
   "settings-schema": "org.gnome.shell.extensions.ntk-aio-quota",
-  "shell-version": ["3.32", "3.34"]
+  "shell-version": ["3.32", "3.34", "3.36"]
 }
