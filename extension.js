@@ -24,7 +24,7 @@ var notified = false
 
 const LIMIT = 80
 const INTERVAL = 5
-const COMMAND = `/bin/sh -c "LANG=C quota | grep -A1 /home/ | tail -n1"`
+const COMMAND = `/bin/sh -c "LANG=C df ~ | tail -n1"`
 
 var QuotaMonitor = GObject.registerClass(
   class QuotaMonitor extends PanelMenu.Button {
@@ -80,7 +80,7 @@ var QuotaMonitor = GObject.registerClass(
       let [_in, out, _err] = GLib.spawn_command_line_sync(COMMAND)
       let quota = ByteArray.toString(out).trim().split(/\s+/)
 
-      let current = parseInt(quota[0])
+      let current = parseInt(quota[2])
       let maximum = parseInt(quota[1])
       let percent = Math.round(100 * current / maximum)
 
