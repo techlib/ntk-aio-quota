@@ -31,7 +31,7 @@ var QuotaMonitor = GObject.registerClass(
     _init(params) {
       super._init(params, indicatorName)
 
-      this.actor.connect('button-press-event', this._openBaobab.bind(this))
+      this.connect('button-press-event', this._openBaobab.bind(this))
       this.initUI()
 
       this.timer = Mainloop.timeout_add_seconds(INTERVAL, this.refresh.bind(this))
@@ -54,7 +54,7 @@ var QuotaMonitor = GObject.registerClass(
       this.box.add(this.icon)
       this.box.add(this.percentage)
 
-      this.actor.add_actor(this.box)
+      this.add_actor(this.box)
     }
 
     destroy() {
