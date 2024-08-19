@@ -1,130 +1,142 @@
-const { St, GObject, GLib, Shell } = imports.gi
+import St from "gi://St";
+import GObject from "gi://GObject";
+import GLib from "gi://GLib";
+import Shell from "gi://Shell";
 
-const Main = imports.ui.main
-const PanelMenu = imports.ui.panelMenu
-const MessageTray = imports.ui.messageTray
+import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
+import * as MessageTray from "resource:///org/gnome/shell/ui/messageTray.js";
 
-const Util = imports.misc.util
-const Mainloop = imports.mainloop
+import * as Util from "resource:///org/gnome/shell/misc/util.js";
+const Mainloop = imports.mainloop;
 
-const ByteArray = imports.byteArray
-const ExtensionUtils = imports.misc.extensionUtils
-const Me = ExtensionUtils.getCurrentExtension()
+import {
+  Extension,
+  gettext as _,
+} from "resource:///org/gnome/shell/extensions/extension.js";
 
-const Gettext = imports.gettext
+const LIMIT = 80;
+const INTERVAL = 5;
+const COMMAND = `/bin/sh -c "LANG=C df ~ | tail -n1"`;
 
-Gettext.textdomain('ntk-aio-quota')
-Gettext.bindtextdomain('ntk-aio-quota', Me.path + '/locale')
-
-const _ = Gettext.gettext;
-
-var quotaMonitorIndicator = null
-var indicatorName = Me.metadata.name
-var notified = false
-
-const LIMIT = 80
-const INTERVAL = 5
-const COMMAND = `/bin/sh -c "LANG=C df ~ | tail -n1"`
-
-var QuotaMonitor = GObject.registerClass(
+const QuotaMonitor = GObject.registerClass(
   class QuotaMonitor extends PanelMenu.Button {
-    _init(params) {
-      super._init(params, indicatorName)
+    _init() {
+      super._init(0.0, "QuotaMonitor");
 
-      this.connect('button-press-event', this._openBaobab.bind(this))
-      this.initUI()
+      this.connect("button-press-event", this._openBaobab.bind(this));
+      this._initUI();
 
-      this.timer = Mainloop.timeout_add_seconds(INTERVAL, this.refresh.bind(this))
-      this.refresh()
+      this.timer = Mainloop.timeout_add_seconds(
+        INTERVAL,
+        this._refresh.bind(this),
+      );
+      this._refresh();
     }
 
-    initUI() {
-      this.box = new St.BoxLayout()
+    _initUI() {
+      this.box = new St.BoxLayout();
 
       this.icon = new St.Icon({
-        icon_name: 'drive-harddisk-symbolic',
-        style_class: 'system-status-icon'
-      })
+        icon_name: "drive-harddisk-symbolic",
+        style_class: "system-status-icon",
+      });
 
       this.percentage = new St.Label({
-        text: '0%',
-        style_class: 'item'
-      })
+        text: "0%",
+        style_class: "item",
+      });
 
-      this.box.add(this.icon)
-      this.box.add(this.percentage)
+      this.box.add_child(this.icon);
+      this.box.add_child(this.percentage);
 
-      this.add_actor(this.box)
+      this.add_child(this.box);
     }
 
     destroy() {
       if (this.timer) {
-        Mainloop.source_remove(this.timer)
-        this.timer = null
+        Mainloop.source_remove(this.timer);
+        this.timer = null;
       }
 
-      super.destroy()
+      super.destroy();
     }
 
     _openBaobab() {
-      var app = global.log(Shell.AppSystem.get_default().lookup_app('org.gnome.baobab.desktop'))
+      const app = Shell.AppSystem.get_default().lookup_app(
+        "org.gnome.baobab.desktop",
+      );
 
-      if (app != null) {
-        app.activate()
+      if (app) {
+        app.activate();
       } else {
-        Util.spawn(['baobab', GLib.get_home_dir()])
+        Util.spawn(["baobab", GLib.get_home_dir()]);
       }
     }
 
-    refresh() {
-      let [_in, out, _err] = GLib.spawn_command_line_sync(COMMAND)
-      let quota = ByteArray.toString(out).trim().split(/\s+/)
+    _refresh() {
+      const [_in, out, _err] = GLib.spawn_command_line_sync(COMMAND);
+      const quota = new TextDecoder().decode(out).trim().split(/\s+/);
 
-      let current = parseInt(quota[2])
-      let maximum = parseInt(quota[1])
-      let percent = Math.round(100 * current / maximum)
+      const current = Number.parseInt(quota[2]);
+      const maximum = Number.parseInt(quota[1]);
+      const percent = Math.round((100 * current) / maximum);
 
-      this.percentage.set_text(`${percent}%`)
+      this.percentage.set_text(`${percent}%`);
 
-      if (percent >= LIMIT && !notified) {
-        notified = true
-        notify(_('Quota Alert'), _('You are almost over your disk quota! Delete some files now.'), 'drive-harddisk-symbolic')
+      if (percent >= LIMIT && !this.notified) {
+        this.notified = true;
+        notify(
+          _("Quota Alert"),
+          _("You are almost over your disk quota! Delete some files now."),
+          "drive-harddisk-symbolic",
+        );
       }
 
-      if (percent < LIMIT && notified) {
-        notified = false
+      if (percent < LIMIT && this.notified) {
+        this.notified = false;
       }
 
       if (this.timer) {
-        Mainloop.source_remove(this.timer)
-        this.timer = null
+        Mainloop.source_remove(this.timer);
+        this.timer = null;
       }
 
-      this.timer = Mainloop.timeout_add_seconds(INTERVAL, this.refresh.bind(this))
+      this.timer = Mainloop.timeout_add_seconds(
+        INTERVAL,
+        this._refresh.bind(this),
+      );
     }
-  }
-)
+  },
+);
 
-function notify(msg, details, icon) {
-  let source = new MessageTray.Source('ntk-aio-quota', icon);
+const notify = (msg, details, icon) => {
+  const source = new MessageTray.Source({
+    title: msg,
+    iconName: icon,
+  });
   Main.messageTray.add(source);
 
-  let notification = new MessageTray.Notification(source, msg, details);
-  notification.setTransient(false);
-  source.notify(notification);
-}
+  const notification = new MessageTray.Notification({
+    source: source,
+    title: msg,
+    body: details,
+    iconName: icon,
+    urgency: MessageTray.Urgency.HIGH,
+  });
+  source.addNotification(notification);
+};
 
-function init() {
-}
+export default class QuotaMonitorExtension extends Extension {
+  enable() {
+    this.quotaMonitorIndicator = new QuotaMonitor();
+    Main.panel.addToStatusArea(this.metadata.uuid, this.quotaMonitorIndicator);
+  }
 
-function enable() {
-  quotaMonitorIndicator = new QuotaMonitor()
-  Main.panel.addToStatusArea(indicatorName, quotaMonitorIndicator)
-}
-
-function disable() {
-  quotaMonitorIndicator.destroy()
-  quotaMonitorIndicator = null
+  disable() {
+    this.quotaMonitorIndicator.destroy();
+    this.quotaMonitorIndicator = null;
+  }
 }
 
 /* vim:set sw=2 ts=2 et: */
