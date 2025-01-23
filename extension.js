@@ -16,6 +16,7 @@ import {
 } from "resource:///org/gnome/shell/extensions/extension.js";
 
 const LIMIT = 80;
+const ANNOYING_POPUP_LIMIT = 95;
 const INTERVAL = 5;
 const COMMAND = `/bin/sh -c "LANG=C df ~ | tail -n1"`;
 
@@ -100,6 +101,10 @@ const QuotaMonitor = GObject.registerClass(
       if (this.timer) {
         Mainloop.source_remove(this.timer);
         this.timer = null;
+
+        if (percent >= ANNOYING_POPUP_LIMIT) {
+          this.notified = false;
+        }
       }
 
       this.timer = Mainloop.timeout_add_seconds(
