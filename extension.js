@@ -12,11 +12,9 @@ const Mainloop = imports.mainloop;
 
 import {
   Extension,
-  // gettext as _,
+  gettext as _,
 } from "resource:///org/gnome/shell/extensions/extension.js";
 
-const { gettext } = imports.gettext.domain("ntk-aio-quota");
-const _ = gettext.gettext;
 
 const LIMIT = 80;
 const ANNOYING_POPUP_LIMIT = 95;
