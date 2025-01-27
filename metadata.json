@@ -4,5 +4,6 @@
   "url": "https://github.com/techlib/ntk-aio-quota",
   "description": "Display quota on the home directory.",
   "settings-schema": "org.gnome.shell.extensions.ntk-aio-quota",
-  "shell-version": ["46", "47"]
+  "shell-version": ["46", "47"],
+  "gettext-domain": "ntk-aio-quota"
 }
