@@ -1,9 +1,9 @@
 {
-  "name": "NTK customers disk quota",
-  "uuid": "ntk-aio-quota@techlib.cz",
-  "url": "https://github.com/techlib/ntk-aio-quota",
-  "description": "Display quota on the home directory.",
-  "settings-schema": "org.gnome.shell.extensions.ntk-aio-quota",
-  "shell-version": ["46", "47", "48", "49"],
-  "gettext-domain": "ntk-aio-quota"
+	"name": "NTK customers disk quota",
+	"uuid": "ntk-aio-quota@techlib.cz",
+	"url": "https://github.com/techlib/ntk-aio-quota",
+	"description": "Display quota on the home directory.",
+	"settings-schema": "org.gnome.shell.extensions.ntk-aio-quota",
+	"shell-version": ["46", "47", "48", "49", "50"],
+	"gettext-domain": "ntk-aio-quota"
 }

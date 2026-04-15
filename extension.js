@@ -14,14 +14,18 @@ import {
 
 const LIMIT = 80;
 const ANNOYING_POPUP_LIMIT = 95;
-const INTERVAL = 5;
-const COMMAND_QUOTA = `LANG=C df ~ | tail -n1`;
+const INTERVAL = 120;
+const ANNOYING_RENOTIFY_INTERVAL = 300;
+const COMMAND_QUOTA = `LANG=C df -P ~ | tail -n1`;
 const COMMAND_HOME_SIZE = `du -s ~ | tail -n1`;
 
 const QuotaMonitor = GObject.registerClass(
   class QuotaMonitor extends PanelMenu.Button {
     _init() {
       super._init(0.0, "QuotaMonitor");
+      this._destroyed = false;
+      this._notificationSource = null;
+      this._lastNotifyTime = 0;
       this.connect("button-press-event", this._openBaobab.bind(this));
       this._initUI();
       this._refresh();
@@ -34,7 +38,7 @@ const QuotaMonitor = GObject.registerClass(
         style_class: "system-status-icon",
       });
       this.percentage = new St.Label({
-        text: "0%",
+        text: "-- %",
         style_class: "item",
       });
       this.box.add_child(this.icon);
@@ -43,10 +47,12 @@ const QuotaMonitor = GObject.registerClass(
     }
 
     destroy() {
+      this._destroyed = true;
       if (this._timeoutId) {
         GLib.Source.remove(this._timeoutId);
         this._timeoutId = null;
       }
+      this._notificationSource = null;
       super.destroy();
     }
 
@@ -71,42 +77,89 @@ const QuotaMonitor = GObject.registerClass(
 
         const current = Number.parseInt(current_home_size);
         const maximum = Number.parseInt(quotaData[1]);
-        const percent = Math.round((100 * current) / maximum);
 
-        log(
-          `QuotaMonitor: current=${current} KB, maximum=${maximum} KB, percent=${percent}%`,
-        );
-
-        this.percentage.set_text(`${percent}%`);
-
-        if (percent >= LIMIT && !this.notified) {
-          this.notified = true;
-          notify(
-            _("Quota Alert"),
-            _("You are almost over your disk quota! Delete some files now."),
-            "drive-harddisk-symbolic",
+        if (Number.isNaN(current) || Number.isNaN(maximum) || maximum <= 0) {
+          log(
+            `QuotaMonitor: failed to parse values — current_raw="${current_home_size}", maximum_raw="${quotaData[1]}"`,
           );
-        }
+          if (!this._destroyed) {
+            this.percentage.set_text("-- %");
+          }
+        } else {
+          const percent = Math.min(
+            Math.max(Math.round((100 * current) / maximum), 0),
+            100,
+          );
 
-        if (percent < LIMIT && this.notified) {
-          this.notified = false;
-        }
+          log(
+            `QuotaMonitor: current=${current} KB, maximum=${maximum} KB, percent=${percent}%`,
+          );
 
-        if (percent >= ANNOYING_POPUP_LIMIT) {
-          this.notified = false;
+          if (!this._destroyed) {
+            this.percentage.set_text(`${percent}%`);
+          }
+
+          this._handleNotifications(percent);
         }
       } catch (e) {
         logError(e, "QuotaMonitor refresh error");
       }
 
-      this._timeoutId = GLib.timeout_add_seconds(
-        GLib.PRIORITY_DEFAULT,
-        INTERVAL,
-        () => {
-          this._refresh();
-          return GLib.SOURCE_REMOVE;
-        },
-      );
+      if (!this._destroyed) {
+        this._timeoutId = GLib.timeout_add_seconds(
+          GLib.PRIORITY_DEFAULT,
+          INTERVAL,
+          () => {
+            this._refresh();
+            return GLib.SOURCE_REMOVE;
+          },
+        );
+      }
+    }
+
+    _handleNotifications(percent) {
+      const now = GLib.get_monotonic_time() / 1000000;
+
+      if (percent >= ANNOYING_POPUP_LIMIT) {
+        const elapsed = now - this._lastNotifyTime;
+        if (elapsed >= ANNOYING_RENOTIFY_INTERVAL) {
+          this._lastNotifyTime = now;
+          this._notify(
+            _("Quota Alert"),
+            _("You are almost over your disk quota! Delete some files now."),
+            "drive-harddisk-symbolic",
+          );
+        }
+      } else if (percent >= LIMIT && !this.notified) {
+        this.notified = true;
+        this._lastNotifyTime = now;
+        this._notify(
+          _("Quota Alert"),
+          _("You are almost over your disk quota! Delete some files now."),
+          "drive-harddisk-symbolic",
+        );
+      } else if (percent < LIMIT) {
+        this.notified = false;
+      }
+    }
+
+    _notify(msg, details, icon) {
+      if (!this._notificationSource || this._notificationSource.destroyed) {
+        this._notificationSource = new MessageTray.Source({
+          title: msg,
+          iconName: icon,
+        });
+        Main.messageTray.add(this._notificationSource);
+      }
+
+      const notification = new MessageTray.Notification({
+        source: this._notificationSource,
+        title: msg,
+        body: details,
+        iconName: icon,
+        urgency: MessageTray.Urgency.HIGH,
+      });
+      this._notificationSource.addNotification(notification);
     }
 
     _execCommand(command) {
@@ -114,8 +167,8 @@ const QuotaMonitor = GObject.registerClass(
         let proc;
         try {
           const argv = ["/bin/sh", "-c", command];
-          // STDOUT_PIPE = 2, STDERR_PIPE = 4
-          const flags = 2 | 4;
+          const flags =
+            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE;
 
           proc = new Gio.Subprocess({
             argv: argv,
@@ -144,23 +197,6 @@ const QuotaMonitor = GObject.registerClass(
     }
   },
 );
-
-const notify = (msg, details, icon) => {
-  const source = new MessageTray.Source({
-    title: msg,
-    iconName: icon,
-  });
-  Main.messageTray.add(source);
-
-  const notification = new MessageTray.Notification({
-    source: source,
-    title: msg,
-    body: details,
-    iconName: icon,
-    urgency: MessageTray.Urgency.HIGH,
-  });
-  source.addNotification(notification);
-};
 
 export default class QuotaMonitorExtension extends Extension {
   enable() {
